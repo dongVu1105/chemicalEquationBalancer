@@ -52,6 +52,155 @@ def subtract_rows(i1, i2):
     for j in range(n):
         a[i1][j] -= a[i2][j]
 
+def parse_compound(compound, V):
+    """Parse a chemical compound and update the mp dictionary"""
+    global mp
+    
+    i = 0
+    while i < len(compound):
+        if 'A' <= compound[i] <= 'Z':
+            # Start of an element symbol
+            element = compound[i]
+            i += 1
+            
+            # Read lowercase letters (rest of element symbol)
+            while i < len(compound) and 'a' <= compound[i] <= 'z':
+                element += compound[i]
+                i += 1
+            
+            # Check for coefficient (number after element)
+            coef = 1
+            if i < len(compound) and '0' <= compound[i] <= '9':
+                coef_str = ""
+                while i < len(compound) and '0' <= compound[i] <= '9':
+                    coef_str += compound[i]
+                    i += 1
+                coef = int(coef_str)
+            
+            # Add element to dictionary
+            if element not in mp[V]:
+                mp[V][element] = 0
+            mp[V][element] += coef * b[V]
+            
+        elif compound[i] == '(':
+            # Find matching closing parenthesis
+            paren_depth = 1
+            start = i + 1
+            i += 1
+            
+            while i < len(compound) and paren_depth > 0:
+                if compound[i] == '(':
+                    paren_depth += 1
+                elif compound[i] == ')':
+                    paren_depth -= 1
+                i += 1
+            
+            if paren_depth != 0:
+                raise ValueError(f"Mismatched parentheses in compound: {compound}")
+            
+            end = i - 1  # Position of closing parenthesis
+            
+            # Check for coefficient after parentheses
+            coef = 1
+            if i < len(compound) and '0' <= compound[i] <= '9':
+                coef_str = ""
+                while i < len(compound) and '0' <= compound[i] <= '9':
+                    coef_str += compound[i]
+                    i += 1
+                coef = int(coef_str)
+            
+            # Parse the content inside parentheses with the coefficient
+            inside = compound[start:end]
+            
+            # Temporarily store current mp[V]
+            old_mp = mp[V].copy()
+            
+            # Parse the content inside parentheses
+            temp_mp = {}
+            parse_group(inside, temp_mp)
+            
+            # Apply the coefficient and add to mp[V]
+            for element, count in temp_mp.items():
+                if element not in mp[V]:
+                    mp[V][element] = 0
+                mp[V][element] += count * coef * b[V]
+            
+        else:
+            # Skip other characters (like spaces)
+            i += 1
+
+def parse_group(group, result_mp):
+    """Parse a group (inside parentheses) and update the provided dict"""
+    i = 0
+    while i < len(group):
+        if 'A' <= group[i] <= 'Z':
+            # Start of an element symbol
+            element = group[i]
+            i += 1
+            
+            # Read lowercase letters (rest of element symbol)
+            while i < len(group) and 'a' <= group[i] <= 'z':
+                element += group[i]
+                i += 1
+            
+            # Check for coefficient (number after element)
+            coef = 1
+            if i < len(group) and '0' <= group[i] <= '9':
+                coef_str = ""
+                while i < len(group) and '0' <= group[i] <= '9':
+                    coef_str += group[i]
+                    i += 1
+                coef = int(coef_str)
+            
+            # Add element to dictionary
+            if element not in result_mp:
+                result_mp[element] = 0
+            result_mp[element] += coef
+            
+        elif group[i] == '(':
+            # Handle nested parentheses (recursive call)
+            paren_depth = 1
+            start = i + 1
+            i += 1
+            
+            while i < len(group) and paren_depth > 0:
+                if group[i] == '(':
+                    paren_depth += 1
+                elif group[i] == ')':
+                    paren_depth -= 1
+                i += 1
+            
+            if paren_depth != 0:
+                raise ValueError(f"Mismatched parentheses in group: {group}")
+            
+            end = i - 1  # Position of closing parenthesis
+            
+            # Check for coefficient after parentheses
+            coef = 1
+            if i < len(group) and '0' <= group[i] <= '9':
+                coef_str = ""
+                while i < len(group) and '0' <= group[i] <= '9':
+                    coef_str += group[i]
+                    i += 1
+                coef = int(coef_str)
+            
+            # Parse the content inside nested parentheses
+            inside = group[start:end]
+            
+            # Temporarily store current mp
+            temp_mp = {}
+            parse_group(inside, temp_mp)
+            
+            # Apply the coefficient and add to result_mp
+            for element, count in temp_mp.items():
+                if element not in result_mp:
+                    result_mp[element] = 0
+                result_mp[element] += count * coef
+            
+        else:
+            # Skip other characters
+            i += 1
+
 def matrix(equation_str):
     """Parse the chemical equation into a matrix"""
     global m, n, mp
@@ -88,69 +237,13 @@ def matrix(equation_str):
     for i in range(n):
         B[i] = b[i]
     
-    # Parse each compound for elements
+    # Reset mp dictionaries
+    for i in range(n):
+        mp[i] = {}
+    
+    # Parse each compound for elements using the new parser
     for V in range(n):
-        compound = s[V]
-        k = 1
-        i = len(compound) - 1
-        
-        while i >= 0:
-            # Digit (coefficient)
-            if '0' <= compound[i] <= '9':
-                if k == 1 and '(' in compound:
-                    k = int(compound[i])
-                else:
-                    t = 1
-                    k2 = 0
-                    # Parse multi-digit number
-                    while i >= 0 and '0' <= compound[i] <= '9':
-                        k2 += t * int(compound[i])
-                        t *= 10
-                        i -= 1
-                    
-                    # Parse element name
-                    element = ""
-                    while i >= 0 and 'a' <= compound[i] <= 'z':
-                        element = compound[i] + element
-                        i -= 1
-                    
-                    element = compound[i] + element
-                    i -= 1
-                    
-                    # Add to dictionary
-                    if element not in mp[V]:
-                        mp[V][element] = 0
-                    mp[V][element] += k * k2 * b[V]
-                    element = ""
-            # Lowercase letter (part of element name)
-            elif 'a' <= compound[i] <= 'z':
-                element = ""
-                while i >= 0 and 'a' <= compound[i] <= 'z':
-                    element = compound[i] + element
-                    i -= 1
-                
-                element = compound[i] + element
-                i -= 1
-                
-                if element not in mp[V]:
-                    mp[V][element] = 0
-                mp[V][element] += k * b[V]
-                element = ""
-            # Uppercase letter (element symbol)
-            elif 'A' <= compound[i] <= 'Z':
-                element = compound[i]
-                i -= 1
-                
-                if element not in mp[V]:
-                    mp[V][element] = 0
-                mp[V][element] = k * b[V]
-                element = ""
-            # Opening parenthesis
-            elif compound[i] == '(':
-                k = 1
-                i -= 1
-            else:
-                i -= 1
+        parse_compound(s[V], V)
     
     # Build the coefficient matrix
     m = 0
@@ -159,10 +252,10 @@ def matrix(equation_str):
     for V in range(n):
         for element in mp[V]:
             if element not in M:
+                M[element] = True
                 for j in range(n):
                     a[m][j] = mp[j].get(element, 0)
                 m += 1
-                M[element] = 123
 
 def simplify():
     """Simplify each row in the matrix by dividing by GCD"""
@@ -191,16 +284,21 @@ def solve():
     # Forward elimination
     for v in range(n - 1):
         k = m - 1
-        while a[k][v] == 0:
+        while k >= 0 and a[k][v] == 0:
             k -= 1
         
+        if k < 0:  # Skip if column is all zeros
+            continue
+            
         for i in range(k - 1, v - 1, -1):
+            if i < 0:
+                break
             if a[i][v] == 0:
                 swap_rows(i, k)
                 k -= 1
         
         for i in range(m - 1, v, -1):
-            if a[i][v] != 0:
+            if a[i][v] != 0 and a[v][v] != 0:
                 t = a[v][v]
                 multiply_row(v, a[i][v])
                 multiply_row(i, t)
@@ -213,7 +311,7 @@ def solve():
     # Back substitution
     for v in range(n - 2, 0, -1):
         for i in range(v):
-            if a[i][v] != 0:
+            if a[i][v] != 0 and a[v][v] != 0:
                 t = a[v][v]
                 multiply_row(v, a[i][v])
                 multiply_row(i, t)
@@ -224,10 +322,14 @@ def solve():
     # Calculate coefficients
     c[n - 1] = 1
     for i in range(n - 1):
-        c[n - 1] *= a[i][i]
+        if a[i][i] != 0:  # Avoid division by zero
+            c[n - 1] *= a[i][i]
     
     for i in range(n - 1):
-        c[i] = -c[n - 1] * a[i][n - 1] // a[i][i]
+        if a[i][i] != 0:  # Avoid division by zero
+            c[i] = -c[n - 1] * a[i][n - 1] // a[i][i]
+        else:
+            c[i] = 1  # Default to 1 if division by zero would occur
     
     # Take absolute values
     for i in range(n):
@@ -240,8 +342,9 @@ def solve():
         k = gcd(k, c[i])
     
     # Divide all coefficients by GCD
-    for i in range(n):
-        c[i] //= k
+    if k > 0:
+        for i in range(n):
+            c[i] //= k
 
 def pthh(equation_str):
     """Process a chemical equation and return the balanced version"""
@@ -384,8 +487,6 @@ class ChemicalEquationBalancerApp:
             self.result_var.set(result)
             
             # Add to history
-            timestamp = tk.StringVar(value=tk.StringVar(
-                self.root, value=f"[{tk.StringVar(self.root, value='')}]").get()).get()
             history_entry = f"Input: {equation}\nBalanced: {result}\n{'-'*50}\n"
             self.history_text.insert(tk.END, history_entry)
             self.history_text.see(tk.END)  # Scroll to the end
